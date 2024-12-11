@@ -3,6 +3,9 @@ import asyncio
 import time
 import sqlite3
 from datetime import datetime, timedelta
+import PIL
+from PIL import Image, ImageDraw, ImageFont
+from io import BytesIO
 
 import psutil
 import re
@@ -221,7 +224,7 @@ async def nick_comms(call: types.CallbackQuery):
 <blockquote><b>просмотр вашего счета и данных на вашем кошельке. так же просмотр сумки предостовяет вам то сколько у вас камней для переработки.</b></blockquote>
 <b>•</b> <code>отдать [сумма]</code>
 <blockquote><b>отдать пользователю указаную сумму коинов на его кошельковый счет.</b></blockquote>
-<b>•</b> <code>тематики стандарт/оформительная</code>
+<b>•</b> <code>тматики стандарт/оформительная</code>
 <blockquote><b>меняйте оформление своего кошелька на второстепеное оформление созданое для всех кто не желает видить цитировку.</b></blockquote>
 """, parse_mode="HTML", reply_markup=floor)
 
@@ -301,7 +304,7 @@ async def set_theme(message: types.Message):
             conn.commit()
             await message.reply('Тема изменена на "обычная".', parse_mode="HTML")
     elif theme_choice == 'обычная':
-        await message.reply('Кажется, вы имели в виду "обычная". Хотите выбрать эту тему? ', parse_mode="HTML")
+        await message.reply('Кажется, вы и��и в виду "обычная". Хотите выбрать эту тему? ', parse_mode="HTML")
     else:
         await message.reply('Неверный вариант темы. Доступны темы: стандарт, оформительная.', parse_mode="HTML")
 
@@ -759,11 +762,11 @@ async def add_admin(message: types.Message):
                 else:
                     await message.reply(f'Пользователь {reply_message.from_user.username} уже является администратором.')
             except Exception as e:
-                await message.reply(f'Произошла ошибка: {e}')
+                await message.reply(f'Произола ошибка: {e}')
         else:
             await message.reply('У вас нет прав для использования этой команды.')
     else:
-        await message.reply('Вы должны ответить на сообщение пользователя, чтобы добавить его в список администраторов.')
+        await message.reply('Вы должны ответить на сообщение ��ользователя, чтобы добавить его в список администраторов.')
 
 
 
@@ -784,11 +787,11 @@ async def remove_admin(message: types.Message):
                 else:
                     await message.reply(f'Пользователь {reply_message.from_user.username} не является администратором.')
             except Exception as e:
-                await message.reply(f'Произошла ошибка: {e}')
+                await message.reply(f'Произола ошибка: {e}')
         else:
             await message.reply('У вас нет прав для использования этой команды.')
     else:
-        await message.reply('Вы должны ответить на сообщение пользователя, чтобы удалить его из списка администраторов.')
+        await message.reply('Вы должны ответить на сообщение п��льзователя, чтобы удалить его из списка администраторов.')
 
 
 
@@ -805,7 +808,7 @@ async def dig(call: types.CallbackQuery):
     await call.message.edit_text("Вы начали собирать...")
     user_id = call.from_user.id
     stones_count = random.randint(5, 20)
-    await call.message.edit_text(f"<blockquote><b>+{stones_count} камней в сумку.</b></blockquote>", parse_mode=ParseMode.HTML, reply_markup=types.InlineKeyboardMarkup().add(types.InlineKeyboardButton("собрать камни", callback_data="dig")))
+    await call.message.edit_text(f"<blockquote><b>+{stones_count} камней в сумку.</b></blockquote>", parse_mode=ParseMode.HTML, reply_markup=types.InlineKeyboardMarkup().add(types.InlineKeyboardButton("обрать камни", callback_data="dig")))
     await add_stones(user_id, stones_count)
 
 @dp.message_handler(lambda message: message.text.lower() == "сумка", state=None)
@@ -867,13 +870,13 @@ async def add_yun_coins(user_id, yun_coins):
 ))
     conn.commit()
 
-@dp.message_handler(lambda message: message.text.lower() == 'зайти в шахту' and message.chat.type != 'private', state=None)
+@dp.message_handler(lambda message: message.text.lower() == 'зайт в шахту' and message.chat.type != 'private', state=None)
 async def handle_command_in_group(message: types.Message):
     user_id = message.from_user.id
     bot_info = await message.bot.get_me()
     bot_username = bot_info.username  
 
-    await message.reply(f"<b><u>Эта команда доступна только в личных сообщениях.</u></b>", parse_mode=ParseMode.HTML, reply_markup=types.InlineKeyboardMarkup().add(types.InlineKeyboardButton("Личный чат", url=f"t.me/{bot_username}")))
+    await message.reply(f"<b><u>Эта команда доступна только в личных с��общениях.</u></b>", parse_mode=ParseMode.HTML, reply_markup=types.InlineKeyboardMarkup().add(types.InlineKeyboardButton("Личный чат", url=f"t.me/{bot_username}")))
 
 
 
@@ -900,6 +903,91 @@ async def show_admin_list(message: types.Message, state: FSMContext):
         await message.answer(admin_list_text, disable_web_page_preview=True, disable_notification=True, parse_mode=types.ParseMode.HTML) 
     else:
         await message.answer("Список админов пуст.")
+
+
+
+@dp.message_handler(Text(equals=['пинг', 'Пинг', 'ping', 'Ping']), content_types=['text', 'photo'])
+async def check_ping(message: types.Message):
+    try:
+        # Замеряем время начала
+        start = time.time()
+        
+        # Отправляем тестовое сообщение для замера пинга
+        msg = await message.answer("Measuring ping...")
+        
+        # Считаем пинг
+        end = time.time()
+        ping = round((end - start) * 1000)
+        
+        # Проверяем, есть ли фотография в сообщении
+        if message.photo:
+            # Получаем фото в лучшем качестве
+            photo = message.photo[-1]
+            # Скачиваем фото
+            file = await bot.download_file_by_id(photo.file_id)
+            # Открываем как изображение PIL
+            background = Image.open(file)
+            # Изменяем размер, сохраняя пропорции
+            background.thumbnail((400, 200))
+            # Создаем новое изображение с нужным размером
+            img = Image.new('RGB', (400, 200))
+            # Вставляем фото по центру
+            x = (400 - background.width) // 2
+            y = (200 - background.height) // 2
+            img.paste(background, (x, y))
+        else:
+            # Если фото нет, создаем стандартный фон
+            img = Image.new('RGB', (400, 200), color='#2B2B2B')
+        
+        draw = ImageDraw.Draw(img)
+        
+        # Определяем цвет в зависимости от пинга
+        if ping < 100:
+            color = '#00FF00'  # Зеленый для хорошего пинга
+        elif ping < 200:
+            color = '#FFFF00'  # Желтый для среднего
+        else:
+            color = '#FF0000'  # Красный для плохого
+
+        # Используем дефолтный шрифт
+        font = ImageFont.load_default()
+        
+        # Текст для отображения
+        text = f"PING: {ping}ms"
+        
+        # Добавляем черную обводку для лучшей читаемости
+        for offset_x, offset_y in [(-1,-1), (-1,1), (1,-1), (1,1)]:
+            # Центрируем текст
+            text_bbox = draw.textbbox((0, 0), text, font=font)
+            text_width = text_bbox[2] - text_bbox[0]
+            text_height = text_bbox[3] - text_bbox[1]
+            x = (400 - text_width) // 2 + offset_x
+            y = (200 - text_height) // 2 + offset_y
+            draw.text((x, y), text, font=font, fill='black')
+        
+        # Рисуем основной текст
+        text_bbox = draw.textbbox((0, 0), text, font=font)
+        text_width = text_bbox[2] - text_bbox[0]
+        text_height = text_bbox[3] - text_bbox[1]
+        x = (400 - text_width) // 2
+        y = (200 - text_height) // 2
+        draw.text((x, y), text, font=font, fill=color)
+        
+        # Сохраняем изображение в байты
+        bio = BytesIO()
+        img.save(bio, 'PNG')
+        bio.seek(0)
+        
+        # Удаляем тестовое сообщение
+        await msg.delete()
+        
+        # Отправляем результат
+        await message.reply_photo(
+            bio,
+            caption=f"🏓 Пинг: {ping} мс"
+        )
+    except Exception as e:
+        await message.reply(f"Ошибка при измерении пинга: {str(e)}")
 
 
 
