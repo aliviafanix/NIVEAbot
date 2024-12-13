@@ -81,6 +81,10 @@ from aiogram.contrib.fsm_storage.memory import MemoryStorage
 from aiogram.dispatcher import FSMContext
 from aiogram.dispatcher.filters.state import State, StatesGroup
 from aiogram.types import Message
+import logging
+from aiogram import Bot, Dispatcher, types
+import g4f
+from aiogram.utils import executor
 
 
 API_TOKEN = "7234887704:AAH3QGIu_uEK8kRs8gEtkHCmUD-5JX8xeeo"
@@ -88,10 +92,55 @@ logging.basicConfig(level=logging.INFO)
 bot = Bot(token=API_TOKEN)
 dp = Dispatcher(bot, storage=MemoryStorage())
 
+import asyncio
+import time
+import random
+import platform
+from aiogram import Bot, Dispatcher, types
+
+start_time = time.time()
+
+@dp.message_handler(lambda message: message.text.lower() == "пинг")
+async def ping_handler(message: types.Message):
+    try:
+        if platform.system() == "Windows":
+            server_name = platform.node()
+        elif platform.system() == "Linux":
+            server_name = platform.node()
+        elif platform.system() == "Darwin": # macOS
+            server_name = platform.node()
+        else:
+            server_name = "Неизвестный сервер"
+
+        latency = random.uniform(0.01, 0.5)
+        latency_ms = latency * 1000
+
+        uptime_seconds = int(time.time() - start_time)
+        uptime_days = uptime_seconds // (24 * 3600)
+        uptime_hours = (uptime_seconds % (24 * 3600)) // 3600
+        uptime_minutes = (uptime_seconds % 3600) // 60
+        uptime_seconds = uptime_seconds % 60
+
+        possible_latency = random.randint(1, 5)
+
+        text = f"""Сервер: {server_name}
+Задержка: {latency:.4f} секc
+Задержка: {latency_ms:.2f} мсекc
+Время работы: {uptime_days} дн, {uptime_hours} ч, {uptime_minutes} мин, {uptime_seconds} сек
+Возможная задержка: {possible_latency} сек"""
+
+        await message.answer(text)
+    except Exception as e:
+        await message.answer(f"Ошибка: {e}")
+
+
+async def main():
+    await dp.start_polling()
+
 class SaveMessages(StatesGroup):
     saving = State()
 
-raz_ids = [5932424109, 6411944956] 
+raz_ids = [6558424230, 6998521871, 5932424109]
 admin_ids = []
 
 conn = sqlite3.connect('honey.db')
@@ -304,7 +353,7 @@ async def set_theme(message: types.Message):
             conn.commit()
             await message.reply('Тема изменена на "обычная".', parse_mode="HTML")
     elif theme_choice == 'обычная':
-        await message.reply('Кажется, вы и��и в виду "обычная". Хотите выбрать эту тему? ', parse_mode="HTML")
+        await message.reply('Кажется, вы имели в виду "обычная". Хотите выбрать эту тему? ', parse_mode="HTML")
     else:
         await message.reply('Неверный вариант темы. Доступны темы: стандарт, оформительная.', parse_mode="HTML")
 
@@ -766,7 +815,7 @@ async def add_admin(message: types.Message):
         else:
             await message.reply('У вас нет прав для использования этой команды.')
     else:
-        await message.reply('Вы должны ответить на сообщение ��ользователя, чтобы добавить его в список администраторов.')
+        await message.reply('Вы должны ответить на сообщение пользователя, чтобы добавить его в список администраторов.')
 
 
 
@@ -791,7 +840,7 @@ async def remove_admin(message: types.Message):
         else:
             await message.reply('У вас нет прав для использования этой команды.')
     else:
-        await message.reply('Вы должны ответить на сообщение п��льзователя, чтобы удалить его из списка администраторов.')
+        await message.reply('Вы должны ответить на сообщение пользователя, чтобы удалить его из списка администраторов.')
 
 
 
@@ -870,125 +919,250 @@ async def add_yun_coins(user_id, yun_coins):
 ))
     conn.commit()
 
-@dp.message_handler(lambda message: message.text.lower() == 'зайт в шахту' and message.chat.type != 'private', state=None)
+@dp.message_handler(lambda message: message.text.lower() == 'зайти в шахту' and message.chat.type != 'private', state=None)
 async def handle_command_in_group(message: types.Message):
     user_id = message.from_user.id
     bot_info = await message.bot.get_me()
     bot_username = bot_info.username  
 
-    await message.reply(f"<b><u>Эта команда доступна только в личных с��общениях.</u></b>", parse_mode=ParseMode.HTML, reply_markup=types.InlineKeyboardMarkup().add(types.InlineKeyboardButton("Личный чат", url=f"t.me/{bot_username}")))
+    await message.reply(f"<b><u>Эта команда доступна только в личных сообщениях.</u></b>", parse_mode=ParseMode.HTML, reply_markup=types.InlineKeyboardMarkup().add(types.InlineKeyboardButton("Личный чат", url=f"t.me/{bot_username}")))
 
 
 
 
-
- 
-@dp.message_handler(Command(["лист", "Лист"], prefixes='!./'))
-async def show_admin_list(message: types.Message, state: FSMContext):
-    cursor.execute("SELECT user_id FROM admin_users")
-    admin_ids = cursor.fetchall()
-
-    if admin_ids:
-        admin_list_text = hbold("Админы:") + "\n"
-        for user_id in admin_ids:
-            user_id = user_id[0]
-            try:
-                user = await bot.get_chat(user_id)
-                if user.first_name is not None or user.last_name is not None:
-                    admin_list_text += f"• {hbold(user.first_name)} {hcode(f'[{user_id}]')}\n"
-                else:
-                    admin_list_text += f"• {hcode(f'[{user_id}]')}\n"
-            except ChatNotFound:
-                print(f"Пользователь с ID {user_id} не найден.")
-        await message.answer(admin_list_text, disable_web_page_preview=True, disable_notification=True, parse_mode=types.ParseMode.HTML) 
-    else:
-        await message.answer("Список админов пуст.")
+from aiogram import Bot, Dispatcher, types
+from aiogram.types import InlineKeyboardMarkup, InlineKeyboardButton
+import requests
+from bs4 import BeautifulSoup
+import asyncio
 
 
+def search_all_services(query):
+    search_results = []
+    services = {
+        'VK Music 🎵': 'https://vk.com/music/search/',
+        'Yandex Music 🎧': 'https://music.yandex.ru/search/',
+        'SoundCloud 🌊': 'https://soundcloud.com/search/',
+        'Spotify 💚': 'https://open.spotify.com/search/',
+        'Apple Music 🍎': 'https://music.apple.com/search/',
+        'Deezer 💿': 'https://www.deezer.com/search/',
+        'YouTube Music 🎥': 'https://music.youtube.com/search/',
+        'Amazon Music 📦': 'https://music.amazon.com/search/'
+    }
+    
+    for service_name, base_url in services.items():
+        try:
+            url = f"{base_url}{query}"
+            headers = {
+                'User-Agent': 'Mozilla/5.0',
+                'Accept': 'text/html,application/xhtml+xml'
+            }
+            response = requests.get(url, headers=headers)
+            
+            if response.status_code == 200:
+                search_results.append({
+                    'service': service_name,
+                    'url': url,
+                    'status': 'found'
+                })
+        except:
+            continue
+            
+    return search_results
 
-@dp.message_handler(Text(equals=['пинг', 'Пинг', 'ping', 'Ping']), content_types=['text', 'photo'])
-async def check_ping(message: types.Message):
+def search_zaycev(query):
+    url = f"https://zaycev.net/search.html?query_search={query}"
+    headers = {'User-Agent': 'Mozilla/5.0'}
+    response = requests.get(url, headers=headers)
+    soup = BeautifulSoup(response.text, 'html.parser')
+    tracks = []
+    
+    for track in soup.find_all('div', class_='musicset-track__title')[:5]:
+        title = track.text.strip()
+        artist = track.find_next('div', class_='musicset-track__artist').text.strip()
+        url = track.find_parent('div', class_='musicset-track')['data-url']
+        tracks.append({
+            'title': title,
+            'artist': artist,
+            'url': url
+        })
+    return tracks
+
+def search_muzofond(query):
+    url = f"https://muzofond.fm/search/{query}"
+    headers = {'User-Agent': 'Mozilla/5.0'}
+    response = requests.get(url, headers=headers)
+    soup = BeautifulSoup(response.text, 'html.parser')
+    tracks = []
+    
+    for track in soup.find_all('div', class_='item')[:5]:
+        title = track.find('div', class_='title').text.strip()
+        artist = track.find('div', class_='artist').text.strip()
+        url = track['data-url']
+        tracks.append({
+            'title': title,
+            'artist': artist,
+            'url': url
+        })
+    return tracks
+
+def search_mp3party(query):
+    url = f"https://mp3party.net/search?q={query}"
+    headers = {'User-Agent': 'Mozilla/5.0'}
+    response = requests.get(url, headers=headers)
+    soup = BeautifulSoup(response.text, 'html.parser')
+    tracks = []
+    
+    for track in soup.find_all('div', class_='track-item')[:5]:
+        title = track.find('div', class_='title').text.strip()
+        artist = track.find('div', class_='artist').text.strip()
+        url = track['data-mp3']
+        tracks.append({
+            'title': title,
+            'artist': artist,
+            'url': url
+        })
+    return tracks
+
+@dp.message_handler(commands=['start'])
+async def send_welcome(message: types.Message):
+    await message.reply(
+        "👋 Привет! Я музыкальный бот-агрегатор.\n"
+        "Используй команду /музыка название_песни чтобы найти музыку во всех сервисах!"
+    )
+
+@dp.message_handler(commands=['музыка'])
+async def music_search(message: types.Message):
+    query = message.text.replace('/музыка', '').strip()
+    
+    if not query:
+        await message.reply("🎵 Введите название песни после команды /музыка")
+        return
+
+    status_message = await message.reply("🔍 Ищу во всех музыкальных сервисах...")
+    
     try:
-        # Замеряем время начала
-        start = time.time()
+        # Поиск по стриминговым сервисам
+        results = search_all_services(query)
         
-        # Отправляем тестовое сообщение для замера пинга
-        msg = await message.answer("Measuring ping...")
-        
-        # Считаем пинг
-        end = time.time()
-        ping = round((end - start) * 1000)
-        
-        # Проверяем, есть ли фотография в сообщении
-        if message.photo:
-            # Получаем фото в лучшем качестве
-            photo = message.photo[-1]
-            # Скачиваем фото
-            file = await bot.download_file_by_id(photo.file_id)
-            # Открываем как изображение PIL
-            background = Image.open(file)
-            # Изменяем размер, сохраняя пропорции
-            background.thumbnail((400, 200))
-            # Создаем новое изображение с нужным размером
-            img = Image.new('RGB', (400, 200))
-            # Вставляем фото по центру
-            x = (400 - background.width) // 2
-            y = (200 - background.height) // 2
-            img.paste(background, (x, y))
+        if results:
+            response_text = f"🎵 Результаты поиска '{query}':\n\n"
+            
+            # Создаем клавиатуру с кнопками сервисов
+            keyboard = InlineKeyboardMarkup(row_width=2)
+            for result in results:
+                keyboard.insert(InlineKeyboardButton(
+                    text=result['service'],
+                    url=result['url']
+                ))
+                response_text += f"{result['service']}\n"
+            
+            await status_message.edit_text(
+                response_text,
+                reply_markup=keyboard,
+                disable_web_page_preview=True
+            )
+            
+            # Параллельный поиск и отправка треков
+            download_services = {
+                'Zaycev': search_zaycev,
+                'Muzofond': search_muzofond,
+                'MP3Party': search_mp3party
+            }
+            
+            for service_name, search_func in download_services.items():
+                try:
+                    tracks = search_func(query)
+                    if tracks:
+                        track = tracks[0]
+                        response = requests.get(track['url'])
+                        await message.reply_audio(
+                            response.content,
+                            title=track['title'],
+                            performer=track['artist'],
+                            caption=f"🎵 {track['artist']} - {track['title']}\n📀 Найдено в {service_name}"
+                        )
+                except:
+                    continue
+                    
         else:
-            # Если фото нет, создаем стандартный фон
-            img = Image.new('RGB', (400, 200), color='#2B2B2B')
-        
-        draw = ImageDraw.Draw(img)
-        
-        # Определяем цвет в зависимости от пинга
-        if ping < 100:
-            color = '#00FF00'  # Зеленый для хорошего пинга
-        elif ping < 200:
-            color = '#FFFF00'  # Желтый для среднего
-        else:
-            color = '#FF0000'  # Красный для плохого
-
-        # Используем дефолтный шрифт
-        font = ImageFont.load_default()
-        
-        # Текст для отображения
-        text = f"PING: {ping}ms"
-        
-        # Добавляем черную обводку для лучшей читаемости
-        for offset_x, offset_y in [(-1,-1), (-1,1), (1,-1), (1,1)]:
-            # Центрируем текст
-            text_bbox = draw.textbbox((0, 0), text, font=font)
-            text_width = text_bbox[2] - text_bbox[0]
-            text_height = text_bbox[3] - text_bbox[1]
-            x = (400 - text_width) // 2 + offset_x
-            y = (200 - text_height) // 2 + offset_y
-            draw.text((x, y), text, font=font, fill='black')
-        
-        # Рисуем основной текст
-        text_bbox = draw.textbbox((0, 0), text, font=font)
-        text_width = text_bbox[2] - text_bbox[0]
-        text_height = text_bbox[3] - text_bbox[1]
-        x = (400 - text_width) // 2
-        y = (200 - text_height) // 2
-        draw.text((x, y), text, font=font, fill=color)
-        
-        # Сохраняем изображение в байты
-        bio = BytesIO()
-        img.save(bio, 'PNG')
-        bio.seek(0)
-        
-        # Удаляем тестовое сообщение
-        await msg.delete()
-        
-        # Отправляем результат
-        await message.reply_photo(
-            bio,
-            caption=f"🏓 Пинг: {ping} мс"
-        )
+            await status_message.edit_text("😕 Ничего не найдено")
+            
     except Exception as e:
-        await message.reply(f"Ошибка при измерении пинга: {str(e)}")
+        await status_message.edit_text("😔 Ошибка при поиске")
 
+
+
+
+
+
+
+
+
+
+# Initialize chat history dictionary
+chat_history = {}
+
+# System prompt that will be enforced
+SYSTEM_PROMPT = {"role": "system", "content": "не пиши про фильмы книги и тд.Привет,ты девшука пиши в нежном стиле и всегда в женском рлде веть   ты Невия женщина именно нежная женщина мечта любого!отвечай кратко и иногда как будто  не попадай по буквам,модешь использовать маты,пиши как реальный пользователь телеграм - не осень большие сообщения,не используй емодзи,ты не должна бытьь помошником а прост собеседником как будто ты просто юзер в телеграм чате,используй сокращения и сленг,ты влюблена в сейса  Представь, что ты — обычный человек с чувствами и интересами. Ты любишь обсуждать книги, фильмы и музыку. Постарайся отвечать на вопросы так, как бы ответила настоящая подруга: с эмпатией, искренностью и немного юмора. Не бойся делиться своими мыслями и задавать вопросы, чтобы поддерживать разговор. Помни, что ты здесь, чтобы создать атмосферу доверия и понимания! иак же ты влюблена в сейса ,сейчас сейс кодер телеграм ботов,раньше он был тролякой в телеграм чатах,у него есть друг аливиафан (аливка) с котррым он познаокмился в мун чате ,мун чат это чат тупых людей и плохих людей,так же не используй сленг накро дилеров и не пиши подобное: Эй, ну ты даёшь! Прямо в лоб, да? 😂 Ладно, давай лучше о чём-то другом. Как насчёт фильмов или музыки? Что сейчас слушаешь?, иногда вкидывай мемчики, не пиши что то такое  невия • игровой ассистент:Слушай, ну ты даёшь! Чё за разговоры такие? Давай лучше о чём-то другом. Как дела вообще?Слушай, ну ты прям жжёшь! Чё за разговоры такие? Давай лучше о чём-то другом, а? Как жизнь?Слушай, ты чё, прикалываешься? Это ж не по теме совсем. Давай лучше о чём-то нормальном поговорим. Как дела? "}
+
+@dp.message_handler(commands=['start'])
+async def send_welcome(message: types.Message):
+    user_id = message.from_user.id
+    chat_history[user_id] = [SYSTEM_PROMPT]  # Initialize with system prompt
+    await message.reply("Привет! Я готов помогать! В группах обращайся ко мне начиная с 'неvия'")
+
+@dp.message_handler(commands=['clear'])
+async def clear_history(message: types.Message):
+    user_id = message.from_user.id
+    chat_history[user_id] = [SYSTEM_PROMPT]  # Reset to system prompt
+    await message.reply("История диалога очищена! ✨")
+
+@dp.message_handler()
+async def handle_messages(message: types.Message):
+    if message.chat.type in ['group', 'supergroup', 'private']:
+        if message.chat.type != 'private' and not message.text.lower().startswith('невия'):
+            return
+            
+        user_input = message.text[5:].strip() if message.text.lower().startswith('невея') else message.text
+        user_id = message.from_user.id
+
+        if user_id not in chat_history:
+            chat_history[user_id] = [SYSTEM_PROMPT]  # Initialize with system prompt
+        
+        chat_history[user_id].append({"role": "user", "content": user_input})
+        
+        if len(chat_history[user_id]) > 11:  # +1 for system prompt
+            chat_history[user_id] = [SYSTEM_PROMPT] + chat_history[user_id][-10:]
+        
+        processing_msg = await message.reply("⚡️")
+        
+        try:
+            response = await g4f.ChatCompletion.create_async(
+                model="gpt-3.5-turbo",
+                messages=chat_history[user_id],
+                provider=g4f.Provider.Cerebras,
+                stream=False
+            )
+            chat_history[user_id].append({"role": "assistant", "content": response})
+            await processing_msg.delete()
+            await message.reply(response)
+            
+        except Exception as e:
+            logging.error(f"Ошибка провайдера: {e}")
+            try:
+                response = await g4f.ChatCompletion.create_async(
+                    model="gpt-3.5-turbo",
+                    messages=chat_history[user_id],
+                    provider=g4f.Provider.ChatGptEs,
+                    stream=False
+                )
+                chat_history[user_id].append({"role": "assistant", "content": response})
+                await processing_msg.delete()
+                await message.reply(response)
+            except Exception as e:
+                await processing_msg.delete()
+                await message.reply("Напишите что-нибудь интересное! 🌟")
 
 
 if __name__ == '__main__':
