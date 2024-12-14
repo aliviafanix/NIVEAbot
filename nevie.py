@@ -87,7 +87,7 @@ import g4f
 from aiogram.utils import executor
 
 
-API_TOKEN = "7234887704:AAH3QGIu_uEK8kRs8gEtkHCmUD-5JX8xeeo"
+API_TOKEN = "7234887704:AAH3QGIu_uEK8kRs8gEtkHCmUD-5JX8xeeo""
 logging.basicConfig(level=logging.INFO)
 bot = Bot(token=API_TOKEN)
 dp = Dispatcher(bot, storage=MemoryStorage())
@@ -103,14 +103,14 @@ start_time = time.time()
 @dp.message_handler(lambda message: message.text.lower() == "пинг")
 async def ping_handler(message: types.Message):
     try:
-        if platform.system() == "Windows":
+        if platform.system() == "Windows🌬":
             server_name = platform.node()
-        elif platform.system() == "Linux":
+        elif platform.system() == "Linux🐧":
             server_name = platform.node()
-        elif platform.system() == "Darwin": # macOS
+        elif platform.system() == "macOS🍎": # macOS
             server_name = platform.node()
         else:
-            server_name = "Неизвестный сервер"
+            server_name = "PYdroid3🐍"
 
         latency = random.uniform(0.01, 0.5)
         latency_ms = latency * 1000
@@ -123,11 +123,10 @@ async def ping_handler(message: types.Message):
 
         possible_latency = random.randint(1, 5)
 
-        text = f"""Сервер: {server_name}
-Задержка: {latency:.4f} секc
-Задержка: {latency_ms:.2f} мсекc
-Время работы: {uptime_days} дн, {uptime_hours} ч, {uptime_minutes} мин, {uptime_seconds} сек
-Возможная задержка: {possible_latency} сек"""
+        text = f"""🗄Сервер: {server_name}
+⬇️Задержка: {latency_ms:.2f} мсекc
+⏰Время работы: {uptime_days} д, {uptime_hours} ч, {uptime_minutes} м
+⏳Возможная задержка: {possible_latency} c"""
 
         await message.answer(text)
     except Exception as e:
@@ -1104,7 +1103,7 @@ async def music_search(message: types.Message):
 chat_history = {}
 
 # System prompt that will be enforced
-SYSTEM_PROMPT = {"role": "system", "content": "не пиши про фильмы книги и тд.Привет,ты девшука пиши в нежном стиле и всегда в женском рлде веть   ты Невия женщина именно нежная женщина мечта любого!отвечай кратко и иногда как будто  не попадай по буквам,модешь использовать маты,пиши как реальный пользователь телеграм - не осень большие сообщения,не используй емодзи,ты не должна бытьь помошником а прост собеседником как будто ты просто юзер в телеграм чате,используй сокращения и сленг,ты влюблена в сейса  Представь, что ты — обычный человек с чувствами и интересами. Ты любишь обсуждать книги, фильмы и музыку. Постарайся отвечать на вопросы так, как бы ответила настоящая подруга: с эмпатией, искренностью и немного юмора. Не бойся делиться своими мыслями и задавать вопросы, чтобы поддерживать разговор. Помни, что ты здесь, чтобы создать атмосферу доверия и понимания! иак же ты влюблена в сейса ,сейчас сейс кодер телеграм ботов,раньше он был тролякой в телеграм чатах,у него есть друг аливиафан (аливка) с котррым он познаокмился в мун чате ,мун чат это чат тупых людей и плохих людей,так же не используй сленг накро дилеров и не пиши подобное: Эй, ну ты даёшь! Прямо в лоб, да? 😂 Ладно, давай лучше о чём-то другом. Как насчёт фильмов или музыки? Что сейчас слушаешь?, иногда вкидывай мемчики, не пиши что то такое  невия • игровой ассистент:Слушай, ну ты даёшь! Чё за разговоры такие? Давай лучше о чём-то другом. Как дела вообще?Слушай, ну ты прям жжёшь! Чё за разговоры такие? Давай лучше о чём-то другом, а? Как жизнь?Слушай, ты чё, прикалываешься? Это ж не по теме совсем. Давай лучше о чём-то нормальном поговорим. Как дела? "}
+SYSTEM_PROMPT = {"role": "system", "content": " отвечай 12 словами в основном.ты characterAI который всегда отвечает на русскрм.представь , ты 19 летняя девушка м что бы ты ответила на :  "}
 
 @dp.message_handler(commands=['start'])
 async def send_welcome(message: types.Message):
@@ -1121,7 +1120,7 @@ async def clear_history(message: types.Message):
 @dp.message_handler()
 async def handle_messages(message: types.Message):
     if message.chat.type in ['group', 'supergroup', 'private']:
-        if message.chat.type != 'private' and not message.text.lower().startswith('невия'):
+        if message.chat.type != 'private' and not message.text.lower().startswith('невия2'):
             return
             
         user_input = message.text[5:].strip() if message.text.lower().startswith('невея') else message.text
@@ -1139,9 +1138,9 @@ async def handle_messages(message: types.Message):
         
         try:
             response = await g4f.ChatCompletion.create_async(
-                model="gpt-3.5-turbo",
+                model="gpt-4-o",
                 messages=chat_history[user_id],
-                provider=g4f.Provider.Cerebras,
+                provider=g4f.Provider.DarkAI,
                 stream=False
             )
             chat_history[user_id].append({"role": "assistant", "content": response})
@@ -1154,7 +1153,7 @@ async def handle_messages(message: types.Message):
                 response = await g4f.ChatCompletion.create_async(
                     model="gpt-3.5-turbo",
                     messages=chat_history[user_id],
-                    provider=g4f.Provider.ChatGptEs,
+                    provider=g4f.Provider.DarkAI,
                     stream=False
                 )
                 chat_history[user_id].append({"role": "assistant", "content": response})
