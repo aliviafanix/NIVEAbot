@@ -18,7 +18,7 @@ import string
 import html
 import datetime
 
-from aiogram import Bot, Dispatcher, executor, types
+from aiogram import Bot, Dispatcher, types
 from aiogram.contrib.middlewares.logging import LoggingMiddleware
 from aiogram.utils import executor
 from aiogram.dispatcher.filters import Text
@@ -54,23 +54,6 @@ from aiogram.dispatcher import FSMContext
 from aiogram.dispatcher.filters import Command
 from aiogram.utils.markdown import hbold, hcode
 from random import randint
-import asyncio
-import os
-import random
-from typing import Optional
-
-from aiogram import Bot, Dispatcher, types
-from aiogram.contrib.fsm_storage.memory import MemoryStorage
-from aiogram.dispatcher import FSMContext
-from aiogram.dispatcher.filters.state import State, StatesGroup
-from aiogram.types import Message
-import asyncio
-from aiogram import Bot, Dispatcher, types
-from aiogram.contrib.fsm_storage.memory import MemoryStorage
-from aiogram.dispatcher import FSMContext
-from aiogram.dispatcher.filters.state import State, StatesGroup
-from aiogram.utils.exceptions import ChatNotFound
-
 import asyncio
 import os
 import random
@@ -136,8 +119,8 @@ async def main():
 class SaveMessages(StatesGroup):
     saving = State()
 
-raz_ids = [6558424230, 6998521871, 5932424109]
-admin_ids = []
+raz_ids = [6558424230, 6998521871, 5932424109, 7241965595]
+admin_ids = [ 7241965595 ]
 
 conn = sqlite3.connect('honey.db')
 cursor = conn.cursor()
@@ -159,21 +142,45 @@ cursor.execute('''
 cursor.execute('''
     CREATE TABLE IF NOT EXISTS users (
         user_id INTEGER PRIMARY KEY,
-        stones INTEGER DEFAULT 0,
-        username TEXT
+        stones INTEGER DEFAULT 0
     )
 ''')
 
+cursor.execute('''
+    CREATE TABLE IF NOT EXISTS modules (
+        chat_id INTEGER,
+        module_name TEXT,
+        is_enabled INTEGER DEFAULT 1,
+        PRIMARY KEY (chat_id, module_name)
+    )
+''')
+cursor.execute('''
+    CREATE TABLE IF NOT EXISTS beta_access (
+        chat_id INTEGER PRIMARY KEY,
+        enabled INTEGER DEFAULT 0
+    )
+''')
+cursor.execute('''
+    CREATE TABLE IF NOT EXISTS user_modules (
+        module_name TEXT PRIMARY KEY,
+        module_type TEXT,
+        description TEXT,
+        commands TEXT,
+        response_type TEXT,
+        response_data TEXT
+    )
+''')
 
-
-cursor.execute('PRAGMA table_info(honey)')
-columns = cursor.fetchall()
-theme_exists = any(column[1] == 'theme' for column in columns)
-
-if not theme_exists:
-    cursor.execute("ALTER TABLE honey ADD COLUMN theme TEXT DEFAULT 'стандарт'")
-    conn.commit()
-
+# Создаем таблицу для истории чата
+cursor.execute('''
+    CREATE TABLE IF NOT EXISTS chat_history (
+        user_id INTEGER,
+        message TEXT,
+        response TEXT,
+        timestamp DATETIME DEFAULT CURRENT_TIMESTAMP
+    )
+''')
+conn.commit()
 
 cursor.execute("SELECT user_id FROM admin_users")
 admin_ids = [row[0] for row in cursor.fetchall()]
@@ -232,26 +239,25 @@ async def commands(message: types.Message):
 
 
 @dp.callback_query_handler(text=['backtocommlistbtn'])
-
 async def back_to_commands(call: types.CallbackQuery):
-
     rate = InlineKeyboardButton("зарабаток", callback_data="rate")
     nick = InlineKeyboardButton("основы", callback_data="nick")
     pref = InlineKeyboardButton("развлечение", callback_data="pref")
 
     floor = InlineKeyboardMarkup(resize_keyboard=True, row_width=2)
-
     floor.row(rate, pref)
     floor.row(nick)
 
-    await call.message.edit_text("""<b>выбор:</b>""", parse_mode="HTML", reply_markup=floor)@dp.callback_query_handler(text=['rate'])
+    await call.message.edit_text("""<b>выбор:</b>""", parse_mode="HTML", reply_markup=floor)
+
+@dp.callback_query_handler(text=['rate'])
 async def rate_comms(call: types.CallbackQuery):
     btclb = InlineKeyboardButton("↩️ вернутся", callback_data="backtocommlistbtn")
     floor = InlineKeyboardMarkup(resize_keyboard=True).add(btclb)
 
     await call.message.edit_text("""
 <b>•</b> <code>бонус</code> <b>&</b> <code>ворк</code>
-<blockquote><b>фарм ваших yun-coin, в двух командах присутствует тайм взаимодействия, в 3 часа от бонуса, и 20 минут от ворка.</b></blockquote>
+<blockquote><b>фарм ваших yun-coin, в двух командах присутствует тайм взаимодействи,  3 часа от бонуса, и 20 минут от ворка.</b></blockquote>
 <b>•</b> <code>зайти в шахту</code> <b>&</b> <code>переработать</code>
 <blockquote><b>зайдите в шахту и начните собирать камни чтобы в дальнейшем их переработать и получить коины. переработка происхолит по курсу один камень - два коина.</b></blockquote>
 """, parse_mode="HTML", reply_markup=floor)
@@ -332,7 +338,7 @@ async def set_theme(message: types.Message):
     current_theme = record[0] if record else 'стандарт'
 
     if theme_choice == 'стандарт':
-        if current_theme == 'стандарт':
+        if current_theme == 'стандрт':
             await message.reply('У вас уже установлена стандартная тема.')
         else:
             cursor.execute('UPDATE honey SET theme = ? WHERE user_id = ?', ('стандарт', user_id))
@@ -358,6 +364,8 @@ async def set_theme(message: types.Message):
 
 @dp.message_handler(lambda message: message.text.lower() == 'бонус')
 async def gather_honey(message: types.Message):
+    if not await check_module(message, 'бонус'):
+        return
     user_id = message.from_user.id
     current_ts = int(datetime.datetime.now().timestamp())
     command_name = 'бонус'
@@ -381,7 +389,7 @@ async def gather_honey(message: types.Message):
             hours = time_until_next_action // 3600
             minutes = (time_until_next_action % 3600) // 60
             seconds = time_until_next_action % 60
-            await message.reply(f"Вы уже забрали бонус недавно. <blockquote>Вы сможете собрать снова через {hours} часов, {minutes} минут и {seconds} секунд.</blockquote>", parse_mode=ParseMode.HTML)
+            await message.reply(f"Вы уже забрали бонус недавно. <blockquote>Вы сможете собрать ��нов через {hours} часов, {minutes} минут и {seconds} секунд.</blockquote>", parse_mode=ParseMode.HTML)
             return
 
     honey_to_add = random.randint(600, 2200)
@@ -407,6 +415,8 @@ async def gather_honey(message: types.Message):
 
 @dp.message_handler(lambda message: message.text.lower() == 'ворк')
 async def gather_honey(message: types.Message):
+    if not await check_module(message, 'ворк'):
+        return
     user_id = message.from_user.id
     current_ts = int(datetime.datetime.now().timestamp())
     command_name = 'ворк'
@@ -497,7 +507,7 @@ async def give_honey(message: types.Message):
             else:
                 await message.reply("У одного из пользователей нет кошелька.")
         except (IndexError, ValueError):
-            await message.reply("Некорректный формат команды. <blockquote>Используйте: 'отдать <число>'.</blockquote>", parse_mode=ParseMode.HTML)
+            await message.reply("Некорректный формат команды. <blockquote>Используйте: 'отдать <ч��сло>'.</blockquote>", parse_mode=ParseMode.HTML)
     else:
         await message.reply("<b>Вы не выбрали пользователя для передачи.</b>", parse_mode=ParseMode.HTML)
 
@@ -507,6 +517,13 @@ async def give_honey(message: types.Message):
 
 @dp.message_handler(commands=["кнб", "Кнб"], commands_prefix='!./')
 async def bot_rps(message: types.Message):
+    if message.chat.type == 'private':
+        await message.reply("<b>Эта команда доступна только в группах!</b>", parse_mode=ParseMode.HTML)
+        return
+
+    if not await check_module(message, 'кнб'):
+        return
+
     try:
         args = message.text
         user_id = message.from_user.id
@@ -564,6 +581,8 @@ async def bot_rps(message: types.Message):
 
 @dp.message_handler(commands=["рулетка", "Рулетка"], commands_prefix='!./')
 async def bot_russian_roulette(message: types.Message):
+    if not await check_module(message, 'рулетка'):
+        return
     try:
         user_id = message.from_user.id
         username = message.from_user.username
@@ -609,6 +628,8 @@ async def bot_russian_roulette(message: types.Message):
 
 @dp.message_handler(commands=["элит", "Элит"], commands_prefix='!./')
 async def bot_elite_casino(message: types.Message):
+    if not await check_module(message, 'элит'):
+        return
     try:
         user_id = message.from_user.id
         username = message.from_user.username
@@ -663,6 +684,8 @@ async def bot_elite_casino(message: types.Message):
 
 @dp.message_handler(Command(["казино", "Казино"], prefixes='!./'))
 async def bot_casino(message: types.Message, state: FSMContext):
+    if not await check_module(message, 'казино'):
+        return
     try:
         user_id = message.from_user.id
         username = message.from_user.username
@@ -682,7 +705,7 @@ async def bot_casino(message: types.Message, state: FSMContext):
         elif len(message.text.split()) == 2 and message.text.split()[1].isdigit():
             bet = int(message.text.split()[1])
         else:
-            await message.reply(hbold("Неверный формат ставки. Используйте !казино <ставка> или !казино вб."), parse_mode='HTML')
+            await message.reply(hbold("Неверный формат ставки. Используйте !казино <��тавка> или !кази��о вб."), parse_mode='HTML')
             return
 
         if bet > result[0]:
@@ -721,9 +744,9 @@ async def reset_yun_coin(message: types.Message):
             except Exception as e:
                 await message.reply(f'Произошла ошибка: {e}')
         else:
-            await message.reply('У вас нет прав для использования этой команды.')
+            await message.reply('У вас нет прав дл�� использования этой команды.')
     else:
-        await message.reply('Вы должны ответить на сообщение пользователя, чтобы обнулить его счет.')
+        await message.reply('Вы должны ответить на сообщение пользователя, чтобы обнулить его ��чет.')
 
 
 
@@ -806,7 +829,7 @@ async def add_admin(message: types.Message):
             except Exception as e:
                 await message.reply(f'Произола ошибка: {e}')
         else:
-            await message.reply('У вас нет прав для использования этой команды.')
+            await message.reply('У вас нет прав д��я использования этой команды.')
     else:
         await message.reply('Вы должны ответить на сообщение пользователя, чтобы добавить его в список администраторов.')
 
@@ -814,389 +837,881 @@ async def add_admin(message: types.Message):
 
 
 
-@dp.message_handler(Command(["удалить", "Удалить"], prefixes='!./'))
-async def remove_admin(message: types.Message):
-    if message.reply_to_message:
-        reply_message = message.reply_to_message
-        if message.from_user.id in raz_ids:
-            try:
-                user_id = reply_message.from_user.id
-                if user_id in admin_ids:
-                    cursor.execute("DELETE FROM admin_users WHERE user_id = ?", (user_id,))
-                    conn.commit()
-                    admin_ids.remove(user_id)
-                    await message.reply(f'Пользователь {reply_message.from_user.username} удален из списка администраторов.')
-                else:
-                    await message.reply(f'Пользователь {reply_message.from_user.username} не является администратором.')
-            except Exception as e:
-                await message.reply(f'Произола ошибка: {e}')
-        else:
-            await message.reply('У вас нет прав для использования этой команды.')
+@dp.message_handler(Text(equals=['админы', '/админы', '!админы', 'Админы']))
+async def show_admins(message: types.Message):
+    if check_permissions(message.from_user.id):
+        try:
+            cursor.execute("SELECT user_id FROM admin_users")
+            admins = cursor.fetchall()
+            
+            if not admins:
+                await message.reply("<b>Список администраторов пуст.</b>", parse_mode=ParseMode.HTML)
+                return
+                
+            text = "<b>Администраторы проекта:</b>\n\n"
+            for admin_id in admins:
+                try:
+                    admin_info = await bot.get_chat(admin_id[0])
+                    username = admin_info.username or admin_info.first_name
+                    text += f"<blockquote>• @{username}</blockquote>\n"
+                except:
+                    text += f"<blockquote>• ID: {admin_id[0]}</blockquote>\n"
+                
+            await message.reply(text, parse_mode=ParseMode.HTML)
+        except Exception as e:
+            await message.reply(f"<b>Произошла ошибка:</b> <code>{e}</code>", parse_mode=ParseMode.HTML)
     else:
-        await message.reply('Вы должны ответить на сообщение пользователя, чтобы удалить его из списка администраторов.')
+        await message.reply("<b>У вас недостаточно привилегий для использования данной команды.</b>\n<blockquote>требуется: администратор/разработчик</blockquote>", parse_mode=ParseMode.HTML)
+
+@dp.message_handler(Text(equals=['.лист']))
+async def show_admins(message: types.Message):
+    if check_permissions(message.from_user.id):
+        try:
+            cursor.execute("SELECT user_id FROM admin_users")
+            admins = cursor.fetchall()
+            
+            if not admins:
+                await message.reply("<b>Список администраторов пуст.</b>", parse_mode=ParseMode.HTML)
+                return
+                
+            text = "<b>Администраторы проекта:</b>\n\n"
+            for admin_id in admins:
+                try:
+                    admin_info = await bot.get_chat(admin_id[0])
+                    username = admin_info.username or admin_info.first_name
+                    text += f"<blockquote>• @{username}</blockquote>\n"
+                except:
+                    text += f"<blockquote>• ID: {admin_id[0]}</blockquote>\n"
+                
+            await message.reply(text, parse_mode=ParseMode.HTML)
+        except Exception as e:
+            await message.reply(f"<b>Произошла ошибка:</b> <code>{e}</code>", parse_mode=ParseMode.HTML)
+    else:
+        await message.reply("<b>У вас недостаточно привилегий для использования данной команды.</b>\n<blockquote>требуется: администратор/разработчик</blockquote>", parse_mode=ParseMode.HTML)
 
 
+# Разделяем модули на системные и пользовательские
+SYSTEM_MODULES = {
+    'бонус': 'Система бонусов',
+    'ворк': 'Система работы',
+    'шахта': 'Шахта и добыча камней',
+    'музыка': 'Поиск музыки',
+    'рулетка': 'Игра в рулетку',
+    'казино': 'Игра в казино',
+    'кнб': 'Камень, ножницы, бумага',
+    'элит': 'Элитное казино'
+}
 
+USER_MODULES = {
+    # Здесь будут пользовательские модули
+}
 
+# Обновляем общий список модулей
+AVAILABLE_MODULES = {**SYSTEM_MODULES, **USER_MODULES}
 
-
-@dp.message_handler(lambda message: message.text.lower() == 'зайти в шахту' and message.chat.type == 'private', state=None)
-async def enter_mine(message: types.Message):
-    await message.reply("<blockquote>вы зашли в шахту</blockquote> <b>собирайте камни чтобы их переработать в коины.</b>", parse_mode=ParseMode.HTML, reply_markup=types.InlineKeyboardMarkup().add(types.InlineKeyboardButton("собрать камни", callback_data="dig")))
-
-
-@dp.callback_query_handler(lambda c: c.data == "dig")
-async def dig(call: types.CallbackQuery):
-    await call.message.edit_text("Вы начали собирать...")
-    user_id = call.from_user.id
-    stones_count = random.randint(5, 20)
-    await call.message.edit_text(f"<blockquote><b>+{stones_count} камней в сумку.</b></blockquote>", parse_mode=ParseMode.HTML, reply_markup=types.InlineKeyboardMarkup().add(types.InlineKeyboardButton("обрать камни", callback_data="dig")))
-    await add_stones(user_id, stones_count)
-
-@dp.message_handler(lambda message: message.text.lower() == "сумка", state=None)
-async def check_stones(message: types.Message):
-    user_id = message.from_user.id
-    stones_count = await get_user_stones(user_id)
-    await message.reply(f"<b>В вашей сумке</b> <blockquote>камней: {stones_count}</blockquote>", parse_mode=ParseMode.HTML)
-
-
-
-@dp.message_handler(lambda message: message.text.lower() == "переработать", state=None)
-async def recycle_stones(message: types.Message):
-    user_id = message.from_user.id
-    stones_count = await get_user_stones(user_id)
-    if stones_count == 0:
-        await message.reply("<b>У вас нет камней для переработки.</b>", parse_mode=ParseMode.HTML)
+@dp.message_handler(Text(equals=['моди', '/м', '!мли']))
+async def list_modules(message: types.Message):
+    if message.chat.type == 'private':
+        await message.reply("<b>Эта команда доступна только в группах!</b>", parse_mode=ParseMode.HTML)
+        return
+        
+    if not check_permissions(message.from_user.id):
+        await message.reply("<b>У вас недостаточно прав для управления модулями.</b>", parse_mode=ParseMode.HTML)
         return
 
+    keyboard = InlineKeyboardMarkup(row_width=2)
+    sys_btn = InlineKeyboardButton("Системные модули", callback_data="sys_modules")
+    user_btn = InlineKeyboardButton("Пользовательские модули [скоро]", callback_data="user_modules")
+    keyboard.add(sys_btn, user_btn)
 
+    await message.reply("<b>Выберите категорию модулей:</b>", reply_markup=keyboard, parse_mode=ParseMode.HTML)
 
+@dp.callback_query_handler(lambda c: c.data in ['sys_modules', 'user_modules'])
+async def show_modules(callback_query: types.CallbackQuery):
+    chat_id = callback_query.message.chat.id
+    
+    if callback_query.data == 'user_modules':
+        if await has_beta_access(chat_id):
+            text = "<b>Пользовательские модули</b>\n\n"
+            if USER_MODULES:
+                text += "<blockquote>Ваши модули:</blockquote>\n"
+                keyboard = InlineKeyboardMarkup(row_width=2)
+                for module_name, description in USER_MODULES.items():
+                    text += f"<blockquote>• {module_name} - {description}</blockquote>\n"
+                    info_btn = InlineKeyboardButton(f"ℹ️ {module_name}", callback_data=f"info_{module_name}")
+                    keyboard.add(info_btn)
+                
+                create_btn = InlineKeyboardButton("➕ Создать модуль", callback_data="create_module")
+                delete_btn = InlineKeyboardButton("🗑 Удалить модуль", callback_data="delete_module")
+                back_btn = InlineKeyboardButton("↩️ Назад", callback_data="back_to_modules")
+                keyboard.add(create_btn)
+                keyboard.add(delete_btn)
+                keyboard.add(back_btn)
+            else:
+                text += "<blockquote>У вас пока нет созданных модулей</blockquote>\n"
+                keyboard = InlineKeyboardMarkup(row_width=2)
+                create_btn = InlineKeyboardButton("➕ Создать модуль", callback_data="create_module")
+                back_btn = InlineKeyboardButton("↩️ Назад", callback_data="back_to_modules")
+                keyboard.add(create_btn)
+                keyboard.add(back_btn)
+        else:
+            text = "<b>Пользовательские модули</b>\n\n"
+            text += "<blockquote>⚠️ Включить бета версию?\n<i>Внимание: функция нестабильна, используйте с осторожностью</i></blockquote>"
+            keyboard = InlineKeyboardMarkup(row_width=2)
+            enable_btn = InlineKeyboardButton("Включить ⚡️", callback_data="enable_beta")
+            back_btn = InlineKeyboardButton("↩️ Назад", callback_data="back_to_modules")
+            keyboard.add(enable_btn, back_btn)
+        
+        await callback_query.message.edit_text(text, reply_markup=keyboard, parse_mode=ParseMode.HTML)
+        return
 
-    yun_coins = stones_count * 2
-    await add_yun_coins(user_id, yun_coins)
-    await message.reply(f"<blockquote>Вы переработали {stones_count} камней</blockquote>\n<b>и получили {yun_coins} yun-coin</b>", parse_mode=ParseMode.HTML)
-    await update_user_stones(user_id, 0) 
+    modules_dict = SYSTEM_MODULES
+    text = "<b>Системные модули:</b>\n\n"
+    keyboard = InlineKeyboardMarkup(row_width=2)
+    
+    for module_name, description in modules_dict.items():
+        is_enabled = await is_module_enabled(callback_query.message.chat.id, module_name)
+        status = "✅" if is_enabled else "❌"
+        text += f"<blockquote>• {module_name} - {description} {status}</blockquote>\n"
+        info_btn = InlineKeyboardButton(f"ℹ️ {module_name}", callback_data=f"info_{module_name}")
+        keyboard.add(info_btn)
+    
+    text += "\n<b>Управление:</b>\n"
+    text += "<code>!вкл</code> [модуль] - включить модуль\n"
+    text += "<code>!выкл</code> [модуль] - выключить модуль"
+    
+    back_btn = InlineKeyboardButton("↩️ Назад", callback_data="back_to_modules")
+    keyboard.add(back_btn)
+    
+    await callback_query.message.edit_text(text, reply_markup=keyboard, parse_mode=ParseMode.HTML)
 
-async def add_stones(user_id, stones_count):
+@dp.callback_query_handler(lambda c: c.data.startswith("info_"))
+async def show_module_info(callback_query: types.CallbackQuery, state: FSMContext):
+    try:
+        await callback_query.answer()  # Сразу отвечаем на callback
+        
+        module_name = callback_query.data.replace("info_", "")
+        module_data = None
+        module_type = "Системный" if module_name in SYSTEM_MODULES else "Пользовательский"
+        
+        if module_name in USER_MODULES:
+            cursor.execute('SELECT * FROM user_modules WHERE module_name = ?', (module_name,))
+            module_data = cursor.fetchone()
+        
+        text = f"<b>ℹ️ Информация о модуле '{module_name}'</b>\n\n"
+        text += f"<blockquote>🔹 Тип: {module_type}\n"
+        
+        if module_name in SYSTEM_MODULES:
+            text += f"🔹 Описание: {SYSTEM_MODULES[module_name]}\n"
+            if module_name == 'шахта':
+                text += "\n<b>Команды:</b>\n"
+                text += "• <code>зайти в шахту</code> - начать добычу камней\n"
+                text += "• <code>переработать</code> - переработать камни в монеты\n"
+                text += "• <code>сумка</code> - посмотреть количество камней\n"
+            elif module_name == 'кнб':
+                text += "\n<b>Команды:</b>\n"
+                text += "• <code>/кнб [каме��ь/ножницы/бумага] [ставка]</code>\n"
+                text += "• <code>/кнб [выбор] вб</code> - ставка всего баланса\n"
+            elif module_name == 'р��летка':
+                text += "\n<b>Команды:</b>\n"
+                text += "• <code>/рулетка [ставка]</code>\n"
+                text += "• <code>/рулетка вб</code> - ставка всего баланса\n"
+            elif module_name == 'казино':
+                text += "\n<b>Команды:</b>\n"
+                text += "• <code>/казино [ставка]</code>\n"
+                text += "• <code>/казино вб</code> - ставка всего баланса\n"
+            elif module_name == 'элит':
+                text += "\n<b>Команды:</b>\n"
+                text += "• <code>/элит [ставка]</code> - минимальная ставка 10000\n"
+            elif module_name == 'бонус':
+                text += "\n<b>Команды:</b>\n"
+                text += "• <code>бонус</code> - получить бонус (доступен раз в 3 часа)\n"
+            elif module_name == 'ворк':
+                text += "\n<b>Команды:</b>\n"
+                text += "• <code>ворк</code> - заработать м��неты (доступен раз в 20 минут)\n"
+        elif module_data:
+            text += f"🔹 Описание: {module_data[2]}\n"
+            text += f"🔹 Команды: {module_data[3]}\n"
+            text += f"🔹 Тип ответа: {module_data[4]}\n"
+            if module_data[4] == 'text':
+                text += f"🔹 Текст ответа: {module_data[5]}\n"
+            elif module_data[4] == 'photo':
+                text += "🔹 Ответ: Фото с подп��сью\n"
+            elif module_data[4] == 'buttons':
+                text += "🔹 Ответ: Сообщение с кнопками\n"
+        
+        is_enabled = await is_module_enabled(callback_query.message.chat.id, module_name)
+        text += f"\n🔹 Сатус: {'Включен ✅' if is_enabled else 'Выключен ❌'}</blockquote>"
+        
+        keyboard = InlineKeyboardMarkup(row_width=2)
+        if not is_enabled:
+            enable_btn = InlineKeyboardButton("✅ Включить", callback_data=f"enable_{module_name}")
+            keyboard.add(enable_btn)
+        else:
+            disable_btn = InlineKeyboardButton("❌ Выключить", callback_data=f"disable_{module_name}")
+            keyboard.add(disable_btn)
+        
+        back_btn = InlineKeyboardButton("↩️ Назад", callback_data="sys_modules" if module_name in SYSTEM_MODULES else "user_modules")
+        keyboard.add(back_btn)
+        
+        await callback_query.message.edit_text(text, reply_markup=keyboard, parse_mode=ParseMode.HTML)
+    except Exception as e:
+        await callback_query.answer(f"Произошла ошибка: {str(e)}", show_alert=True)
+
+@dp.callback_query_handler(lambda c: c.data.startswith(("enable_", "disable_")))
+async def toggle_module(callback_query: types.CallbackQuery):
+    action, module_name = callback_query.data.split("_")
+    if not check_permissions(callback_query.from_user.id):
+        await callback_query.answer("У вас нет прав для управления модулями!", show_alert=True)
+        return
+    
+    is_enabled = action == "enable"
+    cursor.execute('INSERT OR REPLACE INTO modules (chat_id, module_name, is_enabled) VALUES (?, ?, ?)',
+                  (callback_query.message.chat.id, module_name, int(is_enabled)))
+    conn.commit()
+    
+    await callback_query.answer(f"Модуль {module_name} {'включен' if is_enabled else 'выключен'}!")
+    await show_module_info(callback_query, None)
+
+@dp.callback_query_handler(lambda c: c.data == "back_to_modules")
+async def back_to_modules_menu(callback_query: types.CallbackQuery):
+    keyboard = InlineKeyboardMarkup(row_width=2)
+    sys_btn = InlineKeyboardButton("Системные модули", callback_data="sys_modules")
+    user_btn = InlineKeyboardButton("Пользовательские модули [скоро]", callback_data="user_modules")
+    keyboard.add(sys_btn, user_btn)
+    
+    await callback_query.message.edit_text("<b>Выберите категорию модулей:</b>", 
+                                         reply_markup=keyboard, 
+                                         parse_mode=ParseMode.HTML)
+
+@dp.callback_query_handler(lambda c: c.data == "enable_beta")
+async def enable_beta(callback_query: types.CallbackQuery):
+    chat_id = callback_query.message.chat.id
+    cursor.execute('INSERT OR REPLACE INTO beta_access (chat_id, enabled) VALUES (?, 1)', (chat_id,))
+    conn.commit()
+    
+    text = "<b>⚡️ Бета версия активирована!</b>\n\n"
+    text += "<blockquote>🎉 Поздравляем! Теперь у вас есть доступ к пользовательским модулям.\nОбратите вниман��е: функции находятся в разработке и могут работать нестабильно.</blockquote>"
+    keyboard = InlineKeyboardMarkup()
+    back_btn = InlineKeyboardButton("↩️ Назад", callback_data="back_to_modules")
+    keyboard.add(back_btn)
+    await callback_query.message.edit_text(text, reply_markup=keyboard, parse_mode=ParseMode.HTML)
+
+# Модифицируем существующие обработчики команд, добавляя проверку модуля
+async def check_module(message: types.Message, module_name: str) -> bool:
+    if not await is_module_enabled(message.chat.id, module_name):
+        await message.reply(f"<b>Модуль '{module_name}' отключен в этом чате.</b>", parse_mode=ParseMode.HTML)
+        return False
+    return True
+
+async def is_module_enabled(chat_id: int, module_name: str) -> bool:
+    cursor.execute('SELECT is_enabled FROM modules WHERE chat_id = ? AND module_name = ?', (chat_id, module_name))
+    result = cursor.fetchone()
+    if result is None:
+        cursor.execute('INSERT INTO modules (chat_id, module_name, is_enabled) VALUES (?, ?, 1)', (chat_id, module_name))
+        conn.commit()
+        return True
+    return bool(result[0])
+
+@dp.message_handler(commands=['вкл'])
+async def enable_module(message: types.Message):
+    if message.chat.type == 'private':
+        await message.reply("<b>Эта команда доступна только в группах!</b>", parse_mode=ParseMode.HTML)
+        return
+        
+    if not check_permissions(message.from_user.id):
+        await message.reply("<b>У вас недостаточно прав для управления модулями.</b>", parse_mode=ParseMode.HTML)
+        return
+
+    args = message.text.split()
+    if len(args) != 2:
+        await message.reply("<b>Использование:</b> <code>/вкл название_модуля</code>", parse_mode=ParseMode.HTML)
+        return
+
+    module_name = args[1].lower()
+    if module_name not in AVAILABLE_MODULES:
+        modules_list = "\n".join([f"• {name}" for name in AVAILABLE_MODULES.keys()])
+        await message.reply(f"<b>Модуль '{module_name}' не найден.</b>\n\n<b>Доступные модули:</b>\n{modules_list}", parse_mode=ParseMode.HTML)
+        return
+
+    cursor.execute('INSERT OR REPLACE INTO modules (chat_id, module_name, is_enabled) VALUES (?, ?, 1)',
+                  (message.chat.id, module_name))
+    conn.commit()
+    await message.reply(f"<b>Модуль '{module_name}' включен.</b>", parse_mode=ParseMode.HTML)
+
+@dp.message_handler(commands=['выкл'])
+async def disable_module(message: types.Message):
+    if message.chat.type == 'private':
+        await message.reply("<b>Эта команда доступна только в группах!</b>", parse_mode=ParseMode.HTML)
+        return
+        
+    if not check_permissions(message.from_user.id):
+        await message.reply("<b>У вас недостато��но прав для управления модулями.</b>", parse_mode=ParseMode.HTML)
+        return
+
+    args = message.text.split()
+    if len(args) != 2:
+        await message.reply("<b>Использование:</b> <code>/выкл название_модуля</code>", parse_mode=ParseMode.HTML)
+        return
+
+    module_name = args[1].lower()
+    if module_name not in AVAILABLE_MODULES:
+        modules_list = "\n".join([f"• {name}" for name in AVAILABLE_MODULES.keys()])
+        await message.reply(f"<b>Модуль '{module_name}' не найден.</b>\n\n<b>Доступные модули:</b>\n{modules_list}", parse_mode=ParseMode.HTML)
+        return
+
+    cursor.execute('INSERT OR REPLACE INTO modules (chat_id, module_name, is_enabled) VALUES (?, ?, 0)',
+                  (message.chat.id, module_name))
+    conn.commit()
+    await message.reply(f"<b>Модуль '{module_name}' выключен.</b>", parse_mode=ParseMode.HTML)
+
+@dp.message_handler(Command(['вкл', 'выкл'], prefixes='!./'))
+async def handle_module_command(message: types.Message):
+    command = message.text.split()[0][1:] # убираем префикс
+    if command == 'вкл':
+        await enable_module(message)
+    else:
+        await disable_module(message)
+
+@dp.message_handler(Text(equals=['зайти в шахту', 'шахта', '/шахта', '!шахта']))
+async def mine_stones(message: types.Message):
+    if message.chat.type != 'private':
+        await message.reply("<b>Эта команда доступна только в личных сообщениях с ботом!</b>", parse_mode=ParseMode.HTML)
+        return
+
+    if not await check_module(message, 'шахта'):
+        return
+
+    keyboard = InlineKeyboardMarkup()
+    mine_btn = InlineKeyboardButton("⛏ Копать", callback_data="mine_stones")
+    keyboard.add(mine_btn)
+    
+    await message.reply("<b>⛰ Добро пожаловать в шахту!</b>\n<blockquote>Нажмите на кнопку, чтобы начать добычу.</blockquote>", 
+                       reply_markup=keyboard, 
+                       parse_mode=ParseMode.HTML)
+
+@dp.callback_query_handler(lambda c: c.data == "mine_stones")
+async def mine_stones_callback(callback_query: types.CallbackQuery):
+    user_id = callback_query.from_user.id
+    stones_found = random.randint(1, 5)
+    
     cursor.execute('SELECT stones FROM users WHERE user_id = ?', (user_id,))
-    record = cursor.fetchone()
-    if record:
-        current_stones = record[0]
-        new_stones = current_stones + stones_count
+    user = cursor.fetchone()
+    
+    if user:
+        new_stones = user[0] + stones_found
         cursor.execute('UPDATE users SET stones = ? WHERE user_id = ?', (new_stones, user_id))
     else:
-        cursor.execute('INSERT INTO users (user_id, stones) VALUES (?, ?)', (user_id, stones_count))
+        cursor.execute('INSERT INTO users (user_id, stones) VALUES (?, ?)', 
+                      (user_id, stones_found))
+    
     conn.commit()
 
-async def get_user_stones(user_id):
-    cursor.execute('SELECT stones FROM users WHERE user_id = ?', (user_id,))
-    record = cursor.fetchone()
-    if record:
-        return record[0]
-    else:
-        return 0
-
-async def update_user_stones(user_id, stones_count):
-    cursor.execute('UPDATE users SET stones = ? WHERE user_id = ?', (stones_count, user_id))
-    conn.commit()
-
-async def add_yun_coins(user_id, yun_coins):
-    cursor.execute('SELECT honey_count FROM honey WHERE user_id = ?', (user_id,))
-    record = cursor.fetchone()
-    if record:
-        current_yun_coins = record[0]
-        new_yun_coins = current_yun_coins + yun_coins
-        cursor.execute('UPDATE honey SET honey_count = ? WHERE user_id = ?', (new_yun_coins, user_id))
-    else:
-        cursor.execute('INSERT INTO honey (user_id, honey_count) VALUES (?, ?)', (user_id, yun_coins 
-))
-    conn.commit()
-
-@dp.message_handler(lambda message: message.text.lower() == 'зайти в шахту' and message.chat.type != 'private', state=None)
-async def handle_command_in_group(message: types.Message):
-    user_id = message.from_user.id
-    bot_info = await message.bot.get_me()
-    bot_username = bot_info.username  
-
-    await message.reply(f"<b><u>Эта команда доступна только в личных сообщениях.</u></b>", parse_mode=ParseMode.HTML, reply_markup=types.InlineKeyboardMarkup().add(types.InlineKeyboardButton("Личный чат", url=f"t.me/{bot_username}")))
-
-
-
-
-from aiogram import Bot, Dispatcher, types
-from aiogram.types import InlineKeyboardMarkup, InlineKeyboardButton
-import requests
-from bs4 import BeautifulSoup
-import asyncio
-
-
-def search_all_services(query):
-    search_results = []
-    services = {
-        'VK Music 🎵': 'https://vk.com/music/search/',
-        'Yandex Music 🎧': 'https://music.yandex.ru/search/',
-        'SoundCloud 🌊': 'https://soundcloud.com/search/',
-        'Spotify 💚': 'https://open.spotify.com/search/',
-        'Apple Music 🍎': 'https://music.apple.com/search/',
-        'Deezer 💿': 'https://www.deezer.com/search/',
-        'YouTube Music 🎥': 'https://music.youtube.com/search/',
-        'Amazon Music 📦': 'https://music.amazon.com/search/'
-    }
+    keyboard = InlineKeyboardMarkup()
+    mine_btn = InlineKeyboardButton("⛏ Копать ещё", callback_data="mine_stones")
+    keyboard.add(mine_btn)
     
-    for service_name, base_url in services.items():
-        try:
-            url = f"{base_url}{query}"
-            headers = {
-                'User-Agent': 'Mozilla/5.0',
-                'Accept': 'text/html,application/xhtml+xml'
-            }
-            response = requests.get(url, headers=headers)
-            
-            if response.status_code == 200:
-                search_results.append({
-                    'service': service_name,
-                    'url': url,
-                    'status': 'found'
-                })
-        except:
-            continue
-            
-    return search_results
-
-def search_zaycev(query):
-    url = f"https://zaycev.net/search.html?query_search={query}"
-    headers = {'User-Agent': 'Mozilla/5.0'}
-    response = requests.get(url, headers=headers)
-    soup = BeautifulSoup(response.text, 'html.parser')
-    tracks = []
-    
-    for track in soup.find_all('div', class_='musicset-track__title')[:5]:
-        title = track.text.strip()
-        artist = track.find_next('div', class_='musicset-track__artist').text.strip()
-        url = track.find_parent('div', class_='musicset-track')['data-url']
-        tracks.append({
-            'title': title,
-            'artist': artist,
-            'url': url
-        })
-    return tracks
-
-def search_muzofond(query):
-    url = f"https://muzofond.fm/search/{query}"
-    headers = {'User-Agent': 'Mozilla/5.0'}
-    response = requests.get(url, headers=headers)
-    soup = BeautifulSoup(response.text, 'html.parser')
-    tracks = []
-    
-    for track in soup.find_all('div', class_='item')[:5]:
-        title = track.find('div', class_='title').text.strip()
-        artist = track.find('div', class_='artist').text.strip()
-        url = track['data-url']
-        tracks.append({
-            'title': title,
-            'artist': artist,
-            'url': url
-        })
-    return tracks
-
-def search_mp3party(query):
-    url = f"https://mp3party.net/search?q={query}"
-    headers = {'User-Agent': 'Mozilla/5.0'}
-    response = requests.get(url, headers=headers)
-    soup = BeautifulSoup(response.text, 'html.parser')
-    tracks = []
-    
-    for track in soup.find_all('div', class_='track-item')[:5]:
-        title = track.find('div', class_='title').text.strip()
-        artist = track.find('div', class_='artist').text.strip()
-        url = track['data-mp3']
-        tracks.append({
-            'title': title,
-            'artist': artist,
-            'url': url
-        })
-    return tracks
-
-@dp.message_handler(commands=['start'])
-async def send_welcome(message: types.Message):
-    await message.reply(
-        "👋 Привет! Я музыкальный бот-агрегатор.\n"
-        "Используй команду /музыка название_песни чтобы найти музыку во всех сервисах!"
+    await callback_query.message.edit_text(
+        f"<b>⛰ Шахта</b>\n<blockquote>🎉 Вы нашли {stones_found} камней!</blockquote>",
+        reply_markup=keyboard,
+        parse_mode=ParseMode.HTML
     )
 
-@dp.message_handler(commands=['музыка'])
-async def music_search(message: types.Message):
-    query = message.text.replace('/музыка', '').strip()
-    
-    if not query:
-        await message.reply("🎵 Введите название песни после команды /музыка")
+@dp.message_handler(Text(equals=['переработать', '/переработать', '!переработать']))
+async def process_stones(message: types.Message):
+    if message.chat.type != 'private':
+        await message.reply("<b>Эта команда доступна только в личных сообщениях с ботом!</b>", parse_mode=ParseMode.HTML)
         return
 
-    status_message = await message.reply("🔍 Ищу во всех музыкальных сервисах...")
+    if not await check_module(message, 'шахта'):
+        return
+
+    user_id = message.from_user.id
     
-    try:
-        # Поиск по стриминговым сервисам
-        results = search_all_services(query)
+    cursor.execute('SELECT stones FROM users WHERE user_id = ?', (user_id,))
+    user = cursor.fetchone()
+    
+    if not user or user[0] == 0:
+        await message.reply("<blockquote>У вас нет камней для переработки!</blockquote>", parse_mode=ParseMode.HTML)
+        return
+    
+    stones = user[0]
+    coins = stones * 2  # Каждый камень даёт 2 монеты
+    
+    cursor.execute('UPDATE users SET stones = 0 WHERE user_id = ?', (user_id,))
+    cursor.execute('SELECT honey_count FROM honey WHERE user_id = ?', (user_id,))
+    honey_record = cursor.fetchone()
+    
+    if honey_record:
+        new_honey = honey_record[0] + coins
+        cursor.execute('UPDATE honey SET honey_count = ? WHERE user_id = ?', (new_honey, user_id))
+    else:
+        cursor.execute('INSERT INTO honey (user_id, honey_count) VALUES (?, ?)', (user_id, coins))
+    
+    conn.commit()
+    await message.reply(f"<blockquote>Вы переработали {stones} камней и получили {coins} yun-coin!</blockquote>", parse_mode=ParseMode.HTML)
+
+@dp.message_handler(Text(equals=['сумка', '/сумка', '!сумка']))
+async def show_backpack(message: types.Message):
+    if message.chat.type != 'private':
+        await message.reply("<b>Эта команда доступна только в личных сообщениях с ботом!</b>", parse_mode=ParseMode.HTML)
+        return
+
+    if not await check_module(message, 'шахта'):
+        return
+
+    user_id = message.from_user.id
+    cursor.execute('SELECT stones FROM users WHERE user_id = ?', (user_id,))
+    user = cursor.fetchone()
+    
+    if not user:
+        stones = 0
+    else:
+        stones = user[0]
+    
+    await message.reply(f"<blockquote>В вашей сумке {stones} камней</blockquote>", parse_mode=ParseMode.HTML)
+
+async def has_beta_access(chat_id: int) -> bool:
+    cursor.execute('SELECT enabled FROM beta_access WHERE chat_id = ?', (chat_id,))
+    result = cursor.fetchone()
+    return bool(result[0]) if result else False
+
+class ModuleCreation(StatesGroup):
+    waiting_for_name = State()
+    waiting_for_description = State()
+    waiting_for_commands = State()
+    waiting_for_response_type = State()
+    waiting_for_text = State()
+    waiting_for_photo = State()
+    waiting_for_buttons = State()
+    waiting_for_confirmation = State()
+
+@dp.callback_query_handler(lambda c: c.data == "create_module")
+async def create_module_menu(callback_query: types.CallbackQuery):
+    text = "<b>🛠 Создание пользовательского модуля</b>\n\n"
+    text += "<blockquote>Выберите тип модуля, который хотите создать:</blockquote>"
+    
+    keyboard = InlineKeyboardMarkup(row_width=2)
+    game_btn = InlineKeyboardButton("🎮 Игровой", callback_data="create_game_module")
+    util_btn = InlineKeyboardButton("🔧 Утилита", callback_data="create_util_module")
+    back_btn = InlineKeyboardButton("↩️ Назад", callback_data="user_modules")
+    
+    keyboard.add(game_btn, util_btn)
+    keyboard.add(back_btn)
+    
+    await callback_query.message.edit_text(text, reply_markup=keyboard, parse_mode=ParseMode.HTML)
+
+@dp.callback_query_handler(lambda c: c.data.startswith("create_"))
+async def start_module_creation(callback_query: types.CallbackQuery, state: FSMContext):
+    module_type = callback_query.data.replace("create_", "")
+    
+    if module_type not in ["game_module", "util_module"]:
+        await callback_query.answer("Неверный тип модуля!", show_alert=True)
+        return
         
-        if results:
-            response_text = f"🎵 Результаты поиска '{query}':\n\n"
-            
-            # Создаем клавиатуру с кнопками сервисов
-            keyboard = InlineKeyboardMarkup(row_width=2)
-            for result in results:
-                keyboard.insert(InlineKeyboardButton(
-                    text=result['service'],
-                    url=result['url']
-                ))
-                response_text += f"{result['service']}\n"
-            
-            await status_message.edit_text(
-                response_text,
-                reply_markup=keyboard,
-                disable_web_page_preview=True
-            )
-            
-            # Параллельный поиск и отправка треков
-            download_services = {
-                'Zaycev': search_zaycev,
-                'Muzofond': search_muzofond,
-                'MP3Party': search_mp3party
-            }
-            
-            for service_name, search_func in download_services.items():
-                try:
-                    tracks = search_func(query)
-                    if tracks:
-                        track = tracks[0]
-                        response = requests.get(track['url'])
-                        await message.reply_audio(
-                            response.content,
-                            title=track['title'],
-                            performer=track['artist'],
-                            caption=f"🎵 {track['artist']} - {track['title']}\n📀 Найдено в {service_name}"
-                        )
-                except:
-                    continue
-                    
-        else:
-            await status_message.edit_text("😕 Ничего не найдено")
-            
-    except Exception as e:
-        await status_message.edit_text("😔 Ошибка при поиске")
+    await ModuleCreation.waiting_for_name.set()
+    await state.update_data(module_type=module_type)
+    
+    text = "<b>📝 Создание модуля - Шаг 1/3</b>\n\n"
+    text += "<blockquote>Введите название вашего модуля (например: 'мини-игра' или 'калькулятор'):</blockquote>"
+    
+    keyboard = InlineKeyboardMarkup()
+    cancel_btn = InlineKeyboardButton("❌ Отмена", callback_data="cancel_creation")
+    keyboard.add(cancel_btn)
+    
+    await callback_query.message.edit_text(text, reply_markup=keyboard, parse_mode=ParseMode.HTML)
 
+@dp.message_handler(state=ModuleCreation.waiting_for_name)
+async def process_module_name(message: types.Message, state: FSMContext):
+    module_name = message.text.lower()
+    
+    if module_name in AVAILABLE_MODULES:
+        await message.reply("<b>❌ Модуль с таким названием уже существует. Пожалуйста, выберите другое название.</b>", parse_mode=ParseMode.HTML)
+        return
+        
+    await state.update_data(module_name=module_name)
+    await ModuleCreation.waiting_for_description.set()
+    
+    text = "<b>📝 Создание модуля - Шаг 2/3</b>\n\n"
+    text += "<blockquote>Введите описание вашего модуля:</blockquote>"
+    
+    keyboard = InlineKeyboardMarkup()
+    cancel_btn = InlineKeyboardButton("❌ Отмена", callback_data="cancel_creation")
+    keyboard.add(cancel_btn)
+    
+    await message.reply(text, reply_markup=keyboard, parse_mode=ParseMode.HTML)
 
+@dp.message_handler(state=ModuleCreation.waiting_for_description)
+async def process_module_description(message: types.Message, state: FSMContext):
+    description = message.text
+    await state.update_data(description=description)
+    await ModuleCreation.waiting_for_commands.set()
+    
+    text = "<b>📝 Создание модуля - Шаг 3/3</b>\n\n"
+    text += "<blockquote>Введите команды для вашего модуля через запятую\n(например: !игра, /игра, игра):</blockquote>"
+    
+    keyboard = InlineKeyboardMarkup()
+    cancel_btn = InlineKeyboardButton("❌ Отмена", callback_data="cancel_creation")
+    keyboard.add(cancel_btn)
+    
+    await message.reply(text, reply_markup=keyboard, parse_mode=ParseMode.HTML)
 
+@dp.message_handler(state=ModuleCreation.waiting_for_commands)
+async def process_module_commands(message: types.Message, state: FSMContext):
+    commands = [cmd.strip() for cmd in message.text.split(',')]
+    await state.update_data(commands=commands)
+    
+    text = "<b>📝 Настройка ответа модуля</b>\n\n"
+    text += "<blockquote>Выберите тип ответа для вашего модуля:</blockquote>"
+    
+    keyboard = InlineKeyboardMarkup(row_width=2)
+    text_btn = InlineKeyboardButton("📝 Текст", callback_data="response_text")
+    photo_btn = InlineKeyboardButton("🖼 Фото + текст", callback_data="response_photo")
+    buttons_btn = InlineKeyboardButton("🔘 Кнопки", callback_data="response_buttons")
+    cancel_btn = InlineKeyboardButton("❌ Отмена", callback_data="cancel_creation")
+    
+    keyboard.add(text_btn, photo_btn)
+    keyboard.add(buttons_btn)
+    keyboard.add(cancel_btn)
+    
+    await ModuleCreation.waiting_for_response_type.set()
+    await message.reply(text, reply_markup=keyboard, parse_mode=ParseMode.HTML)
 
+@dp.callback_query_handler(lambda c: c.data == "cancel_creation", state="*")
+async def cancel_module_creation(callback_query: types.CallbackQuery, state: FSMContext):
+    await state.finish()
+    await create_module_menu(callback_query)
 
+@dp.callback_query_handler(lambda c: c.data.startswith("response_"), state=ModuleCreation.waiting_for_response_type)
+async def process_response_type(callback_query: types.CallbackQuery, state: FSMContext):
+    response_type = callback_query.data.replace("response_", "")
+    await state.update_data(response_type=response_type)
+    
+    if response_type == "text":
+        text = "<b>📝 Введите текст ответа</b>\n\n"
+        text += "<blockquote>Поддерживается HTML-разметка:\n"
+        text += "• &lt;b&gt;жирный&lt;/b&gt;\n"
+        text += "• &lt;i&gt;курсив&lt;/i&gt;\n"
+        text += "• &lt;code&gt;моноширинный&lt;/code&gt;\n"
+        text += "• &lt;blockquote&gt;цитата&lt;/blockquote&gt;</blockquote>"
+    elif response_type == "photo":
+        text = "<b>🖼 Отправьте фото</b>\n\n"
+        text += "<blockquote>После отправки фото вы сможете добавить к нему подпись.</blockquote>"
+    else:  # buttons
+        text = "<b>🔘 Настройка кнопок</b>\n\n"
+        text += "<blockquote>Введите кнопки в формате:\n"
+        text += "текст1 = ссылка1\n"
+        text += "текст2 = ссылка2\n"
+        text += "текст3</blockquote>"
+    
+    keyboard = InlineKeyboardMarkup()
+    cancel_btn = InlineKeyboardButton("❌ Отмена", callback_data="cancel_creation")
+    keyboard.add(cancel_btn)
+    
+    await ModuleCreation.waiting_for_text.set()
+    await callback_query.message.edit_text(text, reply_markup=keyboard, parse_mode=ParseMode.HTML)
 
+@dp.message_handler(state=ModuleCreation.waiting_for_text, content_types=['text', 'photo'])
+async def process_response_content(message: types.Message, state: FSMContext):
+    data = await state.get_data()
+    response_type = data.get('response_type')
+    
+    if response_type == "photo" and not message.photo:
+        await message.reply("<b>❌ Пожалуйста, отправьте фото.</b>", parse_mode=ParseMode.HTML)
+        return
+    
+    if response_type == "photo":
+        photo_file_id = message.photo[-1].file_id
+        await state.update_data(photo=photo_file_id)
+        text = "<b>📝 Теперь введите подпись к фото</b>"
+        await ModuleCreation.waiting_for_text.set()
+    elif response_type == "buttons":
+        buttons = []
+        for line in message.text.split('\n'):
+            if '=' in line:
+                text, url = line.split('=', 1)
+                buttons.append({"text": text.strip(), "url": url.strip()})
+            else:
+                buttons.append({"text": line.strip()})
+        await state.update_data(buttons=buttons)
+    
+    await state.update_data(text=message.text)
+    
+    # Показываем предпросмотр
+    text = "<b>📋 Подтверждение создания модуля</b>\n\n"
+    text += f"<blockquote>Тип: {'🎮 Игровой' if data['module_type'] == 'game_module' else '🔧 Утилита'}\n"
+    text += f"Название: {data['module_name']}\n"
+    text += f"Описание: {data['description']}\n"
+    text += f"Команды: {', '.join(data['commands'])}\n"
+    text += f"Тип ответа: {response_type}</blockquote>"
+    
+    keyboard = InlineKeyboardMarkup(row_width=2)
+    confirm_btn = InlineKeyboardButton("✅ Подтвердить", callback_data="confirm_module")
+    add_command_btn = InlineKeyboardButton("➕ Добавить команду", callback_data="add_command")
+    cancel_btn = InlineKeyboardButton("❌ Отмена", callback_data="cancel_creation")
+    keyboard.add(confirm_btn, add_command_btn)
+    keyboard.add(cancel_btn)
+    
+    await ModuleCreation.waiting_for_confirmation.set()
+    await message.reply(text, reply_markup=keyboard, parse_mode=ParseMode.HTML)
 
+@dp.callback_query_handler(lambda c: c.data == "confirm_module", state=ModuleCreation.waiting_for_confirmation)
+async def confirm_module_creation(callback_query: types.CallbackQuery, state: FSMContext):
+    data = await state.get_data()
+    module_name = data['module_name']
+    description = data['description']
+    module_type = data['module_type']
+    commands = ','.join(data['commands'])
+    response_type = data.get('response_type', 'text')
+    response_data = data.get('text', '')
+    
+    if response_type == 'photo':
+        response_data = f"{data.get('photo', '')}|{data.get('text', '')}"
+    elif response_type == 'buttons':
+        response_data = str(data.get('buttons', []))
+    
+    # Сохраняем модуль в базу данных
+    cursor.execute('''
+        INSERT OR REPLACE INTO user_modules 
+        (module_name, module_type, description, commands, response_type, response_data) 
+        VALUES (?, ?, ?, ?, ?, ?)
+    ''', (module_name, module_type, description, commands, response_type, response_data))
+    conn.commit()
+    
+    # Обновляем локальные переменные
+    USER_MODULES[module_name] = description
+    AVAILABLE_MODULES.update(USER_MODULES)
+    
+    await state.finish()
+    
+    text = "<b>✅ Модуль успешно создан!</b>\n\n"
+    text += "<blockquote>Теперь вы можете включить его в настройках модулей.</blockquote>"
+    
+    keyboard = InlineKeyboardMarkup()
+    back_btn = InlineKeyboardButton("↩️ К модулям", callback_data="user_modules")
+    keyboard.add(back_btn)
+    
+    await callback_query.message.edit_text(text, reply_markup=keyboard, parse_mode=ParseMode.HTML)
 
+@dp.callback_query_handler(lambda c: c.data == "add_command", state=ModuleCreation.waiting_for_confirmation)
+async def add_command(callback_query: types.CallbackQuery, state: FSMContext):
+    text = "<b>➕ Добавление команды</b>\n\n"
+    text += "<blockquote>Введите дополнительные команды через запятую\n(например: !игра2, /игра2, игра2):</blockquote>"
+    
+    keyboard = InlineKeyboardMarkup()
+    cancel_btn = InlineKeyboardButton("❌ Отмена", callback_data="cancel_add_command")
+    keyboard.add(cancel_btn)
+    
+    await ModuleCreation.waiting_for_commands.set()
+    await callback_query.message.edit_text(text, reply_markup=keyboard, parse_mode=ParseMode.HTML)
 
+@dp.callback_query_handler(lambda c: c.data == "cancel_add_command", state=ModuleCreation.waiting_for_commands)
+async def cancel_add_command(callback_query: types.CallbackQuery, state: FSMContext):
+    data = await state.get_data()
+    
+    text = "<b>📋 Подтверждение создания модуля</b>\n\n"
+    text += f"<blockquote>Тип: {'🎮 Игровой' if data['module_type'] == 'game_module' else '🔧 Утилита'}\n"
+    text += f"Название: {data['module_name']}\n"
+    text += f"Описание: {data['description']}\n"
+    text += f"Команды: {', '.join(data['commands'])}</blockquote>"
+    
+    keyboard = InlineKeyboardMarkup(row_width=2)
+    confirm_btn = InlineKeyboardButton("✅ Подтвердить", callback_data="confirm_module")
+    add_command_btn = InlineKeyboardButton("➕ Добавить команду", callback_data="add_command")
+    cancel_btn = InlineKeyboardButton("❌ Отмена", callback_data="cancel_creation")
+    keyboard.add(confirm_btn, add_command_btn)
+    keyboard.add(cancel_btn)
+    
+    await ModuleCreation.waiting_for_confirmation.set()
+    await callback_query.message.edit_text(text, reply_markup=keyboard, parse_mode=ParseMode.HTML)
 
-# Initialize chat history dictionary
-chat_history = {}
+@dp.callback_query_handler(lambda c: c.data.startswith("delete_"))
+async def delete_selected_module(callback_query: types.CallbackQuery):
+    if not check_permissions(callback_query.from_user.id):
+        await callback_query.answer("У вас нет прав для удаления модулей!", show_alert=True)
+        return
+        
+    module_name = callback_query.data.replace("delete_", "")
+    
+    if module_name in USER_MODULES:
+        # Удаляем модуль из базы данных
+        cursor.execute('DELETE FROM user_modules WHERE module_name = ?', (module_name,))
+        cursor.execute('DELETE FROM modules WHERE module_name = ?', (module_name,))
+        conn.commit()
+        
+        # Удаляем из локальных переменных
+        del USER_MODULES[module_name]
+        if module_name in AVAILABLE_MODULES:
+            del AVAILABLE_MODULES[module_name]
+        
+        text = "<b>✅ Модуль успешно удален!</b>\n\n"
+        text += "<blockquote>Все настройки и данные модуля были очищены.</blockquote>"
+        
+        keyboard = InlineKeyboardMarkup()
+        back_btn = InlineKeyboardButton("↩️ К модулям", callback_data="user_modules")
+        keyboard.add(back_btn)
+        
+        await callback_query.message.edit_text(text, reply_markup=keyboard, parse_mode=ParseMode.HTML)
+    else:
+        await callback_query.answer("Модуль не найден!", show_alert=True)
 
-# System prompt that will be enforced
-SYSTEM_PROMPT = {"role": "system", "content": "не пиши про фильмы книги и тд.Привет,ты девшука пиши в нежном стиле и всегда в женском рлде веть   ты Невия женщина именно нежная женщина мечта любого!отвечай кратко и иногда как будто  не попадай по буквам,модешь использовать маты,пиши как реальный пользователь телеграм - не осень большие сообщения,не используй емодзи,ты не должна бытьь помошником а прост собеседником как будто ты просто юзер в телеграм чате,используй сокращения и сленг,ты влюблена в сейса  Представь, что ты — обычный человек с чувствами и интересами. Ты любишь обсуждать книги, фильмы и музыку. Постарайся отвечать на вопросы так, как бы ответила настоящая подруга: с эмпатией, искренностью и немного юмора. Не бойся делиться своими мыслями и задавать вопросы, чтобы поддерживать разговор. Помни, что ты здесь, чтобы создать атмосферу доверия и понимания! иак же ты влюблена в сейса ,сейчас сейс кодер телеграм ботов,раньше он был тролякой в телеграм чатах,у него есть друг аливиафан (аливка) с котррым он познаокмился в мун чате ,мун чат это чат тупых людей и плохих людей,так же не используй сленг накро дилеров и не пиши подобное: Эй, ну ты даёшь! Прямо в лоб, да? 😂 Ладно, давай лучше о чём-то другом. Как насчёт фильмов или музыки? Что сейчас слушаешь?, иногда вкидывай мемчики, не пиши что то такое  невия • игровой ассистент:Слушай, ну ты даёшь! Чё за разговоры такие? Давай лучше о чём-то другом. Как дела вообще?Слушай, ну ты прям жжёшь! Чё за разговоры такие? Давай лучше о чём-то другом, а? Как жизнь?Слушай, ты чё, прикалываешься? Это ж не по теме совсем. Давай лучше о чём-то нормальном поговорим. Как дела? "}
-
-@dp.message_handler(commands=['start'])
-async def send_welcome(message: types.Message):
-    user_id = message.from_user.id
-    chat_history[user_id] = [SYSTEM_PROMPT]  # Initialize with system prompt
-    await message.reply("Привет! Я готов помогать! В группах обращайся ко мне начиная с 'неvия'")
-
-@dp.message_handler(commands=['clear'])
-async def clear_history(message: types.Message):
-    user_id = message.from_user.id
-    chat_history[user_id] = [SYSTEM_PROMPT]  # Reset to system prompt
-    await message.reply("История диалога очищена! ✨")
+# Загружаем пользовательские модули при запуске
+cursor.execute('SELECT * FROM user_modules')
+modules = cursor.fetchall()
+for module in modules:
+    USER_MODULES[module[0]] = module[2]
+    AVAILABLE_MODULES.update(USER_MODULES)
 
 @dp.message_handler()
-async def handle_messages(message: types.Message):
-    if message.chat.type in ['group', 'supergroup', 'private']:
-        if message.chat.type != 'private' and not message.text.lower().startswith('невия'):
-            return
-            
-        user_input = message.text[5:].strip() if message.text.lower().startswith('невея') else message.text
-        user_id = message.from_user.id
-
-        if user_id not in chat_history:
-            chat_history[user_id] = [SYSTEM_PROMPT]  # Initialize with system prompt
-        
-        chat_history[user_id].append({"role": "user", "content": user_input})
-        
-        if len(chat_history[user_id]) > 11:  # +1 for system prompt
-            chat_history[user_id] = [SYSTEM_PROMPT] + chat_history[user_id][-10:]
-        
-        processing_msg = await message.reply("⚡️")
-        
-        try:
-            response = await g4f.ChatCompletion.create_async(
-                model="gpt-5",
-                messages=chat_history[user_id],
-                provider=g4f.Provider.DDG,
-                stream=False
-            )
-            chat_history[user_id].append({"role": "assistant", "content": response})
-            await processing_msg.delete()
-            await message.reply(response)
-            
-        except Exception as e:
-            logging.error(f"Ошибка провайдера: {e}")
-            try:
-                response = await g4f.ChatCompletion.create_async(
-                    model="gpt-3.5-turbo",
-                    messages=chat_history[user_id],
-                    provider=g4f.Provider.ChatGptEs,
-                    stream=False
-                )
-                chat_history[user_id].append({"role": "assistant", "content": response})
-                await processing_msg.delete()
-                await message.reply(response)
-            except Exception as e:
-                await processing_msg.delete()
-                await message.reply("Напишите что-нибудь интересное! 🌟")
-
-
-@dp.message_handler(lambda message: message.text.lower().startswith('невея генерируй'))
-async def generate_image(message: types.Message):
-    prompt = message.text[14:].strip()
+async def handle_user_modules(message: types.Message):
+    # Получаем все пользовательские модули
+    cursor.execute('SELECT * FROM user_modules')
+    modules = cursor.fetchall()
     
-    if not prompt:
-        await message.reply("напиши что сгенерировать!")
+    for module in modules:
+        module_name = module[0]
+        commands = module[3].split(',')
+        response_type = module[4]
+        response_data = module[5]
+        
+        # Проверяем, соответствует ли сообщение какой-либо команде модуля
+        if message.text.lower() in [cmd.strip().lower() for cmd in commands]:
+            # Проверяем, включен ли модуль
+            if not await check_module(message, module_name):
+                return
+                
+            # Отправляем ответ в зависимости от типа
+            if response_type == 'text':
+                await message.reply(response_data, parse_mode=ParseMode.HTML)
+            
+            elif response_type == 'photo':
+                photo_id, caption = response_data.split('|')
+                await message.reply_photo(photo_id, caption=caption, parse_mode=ParseMode.HTML)
+            
+            elif response_type == 'buttons':
+                keyboard = InlineKeyboardMarkup(row_width=2)
+                buttons = eval(response_data)  # Преобразуем строку в список словарей
+                
+                for button in buttons:
+                    if 'url' in button:
+                        btn = InlineKeyboardButton(button['text'], url=button['url'])
+                    else:
+                        btn = InlineKeyboardButton(button['text'], callback_data=f"custom_{module_name}_{button['text']}")
+                    keyboard.add(btn)
+                
+                await message.reply("Выберите действие:", reply_markup=keyboard, parse_mode=ParseMode.HTML)
+            
+            return  # Прерываем обработку, если команда найдена
+
+@dp.callback_query_handler(lambda c: c.data.startswith("custom_"))
+async def handle_custom_button(callback_query: types.CallbackQuery):
+    try:
+        _, module_name, button_text = callback_query.data.split('_', 2)
+        await callback_query.answer(f"Нажата кнопка '{button_text}' модуля '{module_name}'")
+    except Exception as e:
+        await callback_query.answer(f"Ошибка: {str(e)}", show_alert=True)
+
+@dp.message_handler(Text(equals=['!удалить всех админов нахуй']))
+async def remove_all_admins(message: types.Message):
+    if message.from_user.id not in raz_ids:
+        await message.reply("<b>У вас нет прав для использования этой команды.</b>\n<blockquote>требуется: разработчик</blockquote>", parse_mode=ParseMode.HTML)
         return
         
-    status_msg = await message.reply("генерирую...")
-    
     try:
-        response = g4f.client.Prodia.create_image(
-            prompt=prompt,
-            model="absolutereality_v181.safetensors",
-            negative_prompt="nsfw, nude, naked",
-            steps=25,
-            cfg_scale=7,
-            seed=-1,
-            upscale=True,
-            sampler="DPM++ 2M Karras"
-        )
+        # Получаем список всех админов
+        cursor.execute("SELECT user_id FROM admin_users")
+        admins = cursor.fetchall()
         
-        image_url = response
-        image_data = requests.get(image_url).content
+        if not admins:
+            await message.reply("<b>Список администраторов уже пуст.</b>", parse_mode=ParseMode.HTML)
+            return
+            
+        # Очищаем таблицу админов
+        cursor.execute("DELETE FROM admin_users")
+        conn.commit()
         
-        await message.reply_photo(
-            BytesIO(image_data),
-            caption=f"сгенерировано по запросу: {prompt}"
-        )
-        await status_msg.delete()
+        # Очищаем список админов в памяти
+        admin_ids.clear()
+        
+        # Добавляем обратно разработчиков
+        for dev_id in raz_ids:
+            if dev_id not in admin_ids:
+                cursor.execute("INSERT OR IGNORE INTO admin_users (user_id) VALUES (?)", (dev_id,))
+                admin_ids.append(dev_id)
+        conn.commit()
+        
+        await message.reply("<b>✅ Все администраторы успешно удалены!</b>\n<blockquote>Остались только разработчики.</blockquote>", parse_mode=ParseMode.HTML)
+        
+    except Exception as e:
+        await message.reply(f"<b>Произошла ошибка:</b> <code>{e}</code>", parse_mode=ParseMode.HTML)
+
+@dp.message_handler(Text(startswith=['невия', 'Невия']))
+async def nevia_ai(message: types.Message):
+    try:
+        # Получаем текст после команды
+        query = message.text.split(' ', 1)[1] if len(message.text.split(' ', 1)) > 1 else None
+        
+        if not query:
+            await message.reply("<b>Использование:</b> <code>невия [ваш вопрос]</code>", parse_mode=ParseMode.HTML)
+            return
+
+        # Получаем историю чата пользователя (последние 5 сообщений)
+        cursor.execute('''
+            SELECT message, response FROM chat_history 
+            WHERE user_id = ? 
+            ORDER BY timestamp DESC LIMIT 5
+        ''', (message.from_user.id,))
+        
+        history = cursor.fetchall()
+        
+        # Формируем контекст из истории
+        context = ""
+        if history:
+            for msg, resp in history:
+                context += f"Human: {msg}\nAssistant: {resp}\n"
+        
+        # Формируем промпт с историей
+        prompt = f"{context}Human: {query}\nAssistant:"
+        
+        # Отправляем сообщение о генерации
+        processing_msg = await message.reply("<b>🤔 Генерирую ответ...</b>", parse_mode=ParseMode.HTML)
+        
+        try:
+            # Используем g4f для генерации ответа
+            response = g4f.ChatCompletion.create(
+                model="gpt-3.5-turbo",
+                messages=[{"role": "user", "content": prompt}],
+                provider=g4f.Provider.DeepAi,
+            )
+            
+            # Сохраняем сообщение и ответ в историю
+            cursor.execute('''
+                INSERT INTO chat_history (user_id, message, response) 
+                VALUES (?, ?, ?)
+            ''', (message.from_user.id, query, response))
+            conn.commit()
+            
+            # Редактируем сообщение с ответом
+            await processing_msg.edit_text(f"<b>🤖 Ответ:</b>\n\n<blockquote>{response}</blockquote>", parse_mode=ParseMode.HTML)
+            
+        except Exception as e:
+            await processing_msg.edit_text(f"<b>Произошла ошибка при генерации:</b> <code>{str(e)}</code>", parse_mode=ParseMode.HTML)
             
     except Exception as e:
-        await status_msg.edit_text(f"ошибка генерации: {str(e)}")
+        await message.reply(f"<b>Произошла ошибк��:</b> <code>{str(e)}</code>", parse_mode=ParseMode.HTML)
 
-
-
-
-
-
+@dp.message_handler(Text(equals=['.очистить историю', '.clear']))
+async def clear_chat_history(message: types.Message):
+    if not check_permissions(message.from_user.id):
+        await message.reply("<b>У вас ��ет прав для исполь��ования этой команды.</b>", parse_mode=ParseMode.HTML)
+        return
+        
+    try:
+        cursor.execute('DELETE FROM chat_history WHERE user_id = ?', (message.from_user.id,))
+        conn.commit()
+        await message.reply("<b>✅ История чата успешно очищена!</b>", parse_mode=ParseMode.HTML)
+    except Exception as e:
+        await message.reply(f"<b>Произошла ошибка:</b> <code>{str(e)}</code>", parse_mode=ParseMode.HTML)
 
 if __name__ == '__main__':
     executor.start_polling(dp, skip_updates=True)
