@@ -1,0 +1,6 @@
+aiogram==2.25.1
+g4f==0.1.9.3
+requests==2.31.0
+aiohttp==3.8.6
+Pillow==10.0.0
+psutil==5.9.5 

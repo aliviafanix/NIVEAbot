@@ -1,0 +1,5 @@
+venv_new/
+2|2|__pycache__/
+3|3|*.pyc
+4|4|.idea/
+5|5|.vscode/
